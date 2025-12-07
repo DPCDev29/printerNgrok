@@ -91,6 +91,28 @@ curl -X POST http://localhost:5000/ngrok \
   }'
 ```
 
+### Ejemplo 3b: POST con form-data
+
+```bash
+curl -X POST http://localhost:5000/ngrok \
+  -F "ip=192.168.10.11" \
+  -F "puerto=8082" \
+  -F "dominio=lalena" \
+  -F "local_id=LOCAL001" \
+  -F "device_id=DEVICE123" \
+  -F "method=POST" \
+  -F "path=/api/print" \
+  -F "body={\"printer\":\"HP001\",\"data\":\"test\"}"
+```
+
+### Ejemplo 3c: POST con x-www-form-urlencoded
+
+```bash
+curl -X POST http://localhost:5000/ngrok \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "ip=192.168.10.11&puerto=8082&dominio=lalena&local_id=LOCAL001&device_id=DEVICE123&method=POST&path=/api/print&body={\"printer\":\"HP001\"}"
+```
+
 ### Ejemplo 4: Desde navegador
 
 ```

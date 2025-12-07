@@ -15,6 +15,10 @@ clients_lock = threading.Lock()
 pending_responses = {}
 pending_lock = threading.Lock()
 
+# Rate limiting: IP -> timestamp de última conexión rechazada SSL
+ssl_rejected_ips = {}
+ssl_rejected_lock = threading.Lock()
+
 
 def start_control_server(host="0.0.0.0", port=5002):
     """Servidor TCP que acepta conexiones de los clientes C# y los registra por dominio."""
@@ -144,9 +148,10 @@ def ngrok_endpoint():
 
     URL de ejemplo:
     GET: http://localhost:5000/ngrok?ip=192.168.10.11&puerto=8082&dominio=lalena&local_id=LOCAL001&device_id=DEVICE123
-    POST: http://localhost:5000/ngrok (con JSON body)
+    POST JSON: http://localhost:5000/ngrok (con JSON body)
+    POST Form: http://localhost:5000/ngrok (con form-data o x-www-form-urlencoded)
     """
-    # Soportar tanto GET (query params) como POST (JSON body)
+    # Soportar GET, POST JSON, POST form-data
     if request.method == "GET":
         ip = request.args.get("ip")
         puerto = request.args.get("puerto")
@@ -157,15 +162,30 @@ def ngrok_endpoint():
         target_path = request.args.get("path", "/")
         body_data = None
     else:  # POST
-        data = request.get_json() or {}
-        ip = data.get("ip")
-        puerto = data.get("puerto")
-        dominio = data.get("dominio")
-        local_id = data.get("local_id")
-        device_id = data.get("device_id")
-        target_method = data.get("method", "POST")
-        target_path = data.get("path", "/")
-        body_data = data.get("body")
+        # Detectar tipo de contenido
+        content_type = request.content_type or ""
+        
+        if "application/json" in content_type:
+            # POST con JSON
+            data = request.get_json() or {}
+            ip = data.get("ip")
+            puerto = data.get("puerto")
+            dominio = data.get("dominio")
+            local_id = data.get("local_id")
+            device_id = data.get("device_id")
+            target_method = data.get("method", "POST")
+            target_path = data.get("path", "/")
+            body_data = data.get("body")
+        else:
+            # POST con form-data o x-www-form-urlencoded
+            ip = request.form.get("ip")
+            puerto = request.form.get("puerto")
+            dominio = request.form.get("dominio")
+            local_id = request.form.get("local_id")
+            device_id = request.form.get("device_id")
+            target_method = request.form.get("method", "POST")
+            target_path = request.form.get("path", "/")
+            body_data = request.form.get("body")
 
     if not ip or not puerto or not dominio or not local_id or not device_id:
         return jsonify({"ok": False, "error": "Faltan parametros: ip, puerto, dominio, local_id, device_id"}), 400
