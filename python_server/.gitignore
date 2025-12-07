@@ -1,0 +1,23 @@
+# Certificados SSL - NUNCA commitear
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+
+# Variables de entorno
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Logs
+*.log
