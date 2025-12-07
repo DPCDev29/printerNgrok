@@ -161,12 +161,13 @@ def ngrok_endpoint():
         target_method = "GET"
         target_path = request.args.get("path", "/")
         body_data = None
+        forward_raw_body = False
     else:  # POST
         # Detectar tipo de contenido
         content_type = request.content_type or ""
         
         if "application/json" in content_type:
-            # POST con JSON
+            # POST con JSON - parsear y extraer parámetros
             data = request.get_json() or {}
             ip = data.get("ip")
             puerto = data.get("puerto")
@@ -176,6 +177,7 @@ def ngrok_endpoint():
             target_method = data.get("method", "POST")
             target_path = data.get("path", "/")
             body_data = data.get("body")
+            forward_raw_body = False
         else:
             # POST con form-data o x-www-form-urlencoded
             ip = request.form.get("ip")
@@ -185,7 +187,16 @@ def ngrok_endpoint():
             device_id = request.form.get("device_id")
             target_method = request.form.get("method", "POST")
             target_path = request.form.get("path", "/")
-            body_data = request.form.get("body")
+            
+            # Si hay campo "body" en el form, usarlo
+            # Si no, reenviar el form-data completo al servidor local
+            if request.form.get("body"):
+                body_data = request.form.get("body")
+                forward_raw_body = False
+            else:
+                # Reenviar todo el body raw (útil si el endpoint local espera form-data)
+                body_data = request.get_data(as_text=True)
+                forward_raw_body = True
 
     if not ip or not puerto or not dominio or not local_id or not device_id:
         return jsonify({"ok": False, "error": "Faltan parametros: ip, puerto, dominio, local_id, device_id"}), 400
@@ -210,10 +221,14 @@ def ngrok_endpoint():
     with pending_lock:
         pending_responses[request_id] = {"event": event, "response": None}
 
-    # Recopilar headers del request original (excepto Host)
+    # Recopilar headers del request original
     headers_dict = {}
     for key, value in request.headers.items():
-        if key.lower() not in ['host', 'content-length', 'connection']:
+        # Excluir headers que serán recalculados por C#
+        if key.lower() not in ['host', 'connection']:
+            # Content-Length se excluye solo si NO estamos reenviando raw body
+            if key.lower() == 'content-length' and not forward_raw_body:
+                continue
             headers_dict[key] = value
     
     # Enviar comando al cliente (C# espera PascalCase)
