@@ -28,36 +28,52 @@ def start_control_server(host="0.0.0.0", port=5002):
         print(f"[PY] New client from {addr}")
         client_key = None
         try:
-            # Leer primera línea con timeout y buffer acumulativo
-            conn.settimeout(5.0)
+            # Leer primera línea con timeout extendido
+            conn.settimeout(10.0)  # Dar más tiempo
             buffer = b""
-            max_attempts = 10
             
-            # Leer hasta encontrar newline o timeout
-            for _ in range(max_attempts):
+            # Leer hasta encontrar newline completo
+            while True:
                 try:
-                    chunk = conn.recv(256)
+                    chunk = conn.recv(1024)
                     if not chunk:
-                        break
+                        print(f"[PY] Connection closed by {addr} before sending data")
+                        conn.close()
+                        return
+                    
                     buffer += chunk
+                    
+                    # Si encontramos newline, ya tenemos la línea completa
                     if b"\n" in buffer:
                         break
+                    
+                    # Protección: máximo 8KB para el registro
+                    if len(buffer) > 8192:
+                        print(f"[PY] ✗ Registration too large from {addr}, closing")
+                        conn.close()
+                        return
+                        
                 except socket.timeout:
-                    break
+                    print(f"[PY] ✗ Timeout waiting for registration from {addr}")
+                    conn.close()
+                    return
             
             # Extraer primera línea
-            if b"\n" in buffer:
-                registro_raw = buffer.split(b"\n", 1)[0].decode("utf-8", errors="ignore").strip()
-            else:
-                registro_raw = buffer.decode("utf-8", errors="ignore").strip()
+            registro_raw = buffer.split(b"\n", 1)[0].decode("utf-8", errors="ignore").strip()
             
             if not registro_raw:
-                print(f"[PY] Client {addr} sent empty registro, closing")
+                print(f"[PY] ✗ Empty registration from {addr}")
+                conn.close()
+                return
+            
+            # Detectar si es SSL/TLS (comienza con 0x16 0x03)
+            if len(buffer) >= 2 and buffer[0] == 0x16 and buffer[1] == 0x03:
+                print(f"[PY] ✗ SSL/TLS rejected from {addr} (port 5002 is TCP only)")
                 conn.close()
                 return
             
             # Debug: mostrar lo que se recibió
-            print(f"[PY] Received from {addr}: {registro_raw[:100]}")
+            print(f"[PY] Received registration from {addr}: {registro_raw[:150]}")
             
             try:
                 registro = json.loads(registro_raw)
